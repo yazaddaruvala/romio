@@ -16,12 +16,12 @@ use crate::reactor::PollEvented;
 ///
 /// After creating a `TcpListener` by [`bind`]ing it to a socket address, it listens
 /// for incoming TCP connections. These can be accepted by awaiting elements from the
-/// async stream of incoming connections, [`incoming`][`TcpListener::incoming`].
+/// async stream of incoming connections, by calling [`next`].
 ///
 /// The socket will be closed when the value is dropped.
 ///
 /// [`bind`]: #method.bind
-/// [`TcpListener::incoming`]: #method.incoming
+/// [`next`]: #impl-Stream
 ///
 /// # Examples
 ///
@@ -38,16 +38,16 @@ use crate::reactor::PollEvented;
 ///
 /// async fn listen() -> Result<(), Box<dyn Error + 'static>> {
 ///     let socket_addr = "127.0.0.1:80".parse()?;
-///     let listener = TcpListener::bind(&socket_addr)?;
-///     let mut incoming = listener.incoming();
+///     let mut listener = TcpListener::bind(&socket_addr)?;
 ///
 ///     // accept connections and process them serially
-///     while let Some(stream) = await!(incoming.next()) {
+///     while let Some(stream) = await!(listener.next()) {
 ///         await!(recite_shakespeare(stream?));
 ///     }
 ///     Ok(())
 /// }
 /// ```
+#[must_use = "streams do nothing unless polled"]
 pub struct TcpListener {
     io: PollEvented<mio::net::TcpListener>,
 }
@@ -106,46 +106,6 @@ impl TcpListener {
     /// ```
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         self.io.get_ref().local_addr()
-    }
-
-    /// Consumes this listener, returning a stream of the sockets this listener
-    /// accepts.
-    ///
-    /// This method returns an implementation of the `Stream` trait which
-    /// resolves to the sockets the are accepted on this listener.
-    ///
-    /// # Errors
-    ///
-    /// Note that accepting a connection can lead to various errors and not all of them are
-    /// necessarily fatal ‒ for example having too many open file descriptors or the other side
-    /// closing the connection while it waits in an accept queue. These would terminate the stream
-    /// if not handled in any way.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// #![feature(async_await, await_macro, futures_api)]
-    /// use futures::prelude::*;
-    /// use romio::tcp::TcpListener;
-    ///
-    /// # async fn work () -> Result<(), Box<dyn std::error::Error + 'static>> {
-    /// let socket_addr = "127.0.0.1:80".parse()?;
-    /// let listener = TcpListener::bind(&socket_addr)?;
-    /// let mut incoming = listener.incoming();
-    ///
-    /// // accept connections and process them serially
-    /// while let Some(stream) = await!(incoming.next()) {
-    ///     match stream {
-    ///         Ok(stream) => {
-    ///             println!("new client!");
-    ///         },
-    ///         Err(e) => { /* connection failed */ }
-    ///     }
-    /// }
-    /// # Ok(())}
-    /// ```
-    pub fn incoming(self) -> Incoming {
-        Incoming::new(self)
     }
 
     /// Gets the value of the `IP_TTL` option for this socket.
@@ -238,25 +198,43 @@ mod sys {
     }
 }
 
-/// Stream returned by the `TcpListener::incoming` function representing the
-/// stream of sockets received from a listener.
-#[must_use = "streams do nothing unless polled"]
-#[derive(Debug)]
-pub struct Incoming {
-    inner: TcpListener,
-}
-
-impl Incoming {
-    pub(crate) fn new(listener: TcpListener) -> Incoming {
-        Incoming { inner: listener }
-    }
-}
-
-impl Stream for Incoming {
+/// An implementation of the `Stream` trait which
+/// resolves to the sockets that are accepted on this listener.
+///
+/// # Errors
+///
+/// Note that accepting a connection can lead to various errors and not all of them are
+/// necessarily fatal ‒ for example having too many open file descriptors or the other side
+/// closing the connection while it waits in an accept queue. These would terminate the stream
+/// if not handled in any way.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// #![feature(async_await, await_macro, futures_api)]
+/// use futures::prelude::*;
+/// use romio::tcp::TcpListener;
+///
+/// # async fn work () -> Result<(), Box<dyn std::error::Error + 'static>> {
+/// let socket_addr = "127.0.0.1:80".parse()?;
+/// let mut listener = TcpListener::bind(&socket_addr)?;
+///
+/// // accept connections and process them serially
+/// while let Some(stream) = await!(listener.next()) {
+///     match stream {
+///         Ok(stream) => {
+///             println!("new client!");
+///         },
+///         Err(e) => { /* connection failed */ }
+///     }
+/// }
+/// # Ok(())}
+/// ```
+impl Stream for TcpListener {
     type Item = io::Result<TcpStream>;
 
     fn poll_next(mut self: Pin<&mut Self>, lw: &LocalWaker) -> Poll<Option<Self::Item>> {
-        let (socket, _) = ready!(self.inner.poll_accept(lw)?);
+        let (socket, _) = ready!(self.poll_accept(lw)?);
         Poll::Ready(Some(Ok(socket)))
     }
 }

@@ -29,11 +29,10 @@
 //!
 //! async fn listen() -> Result<(), Box<dyn std::error::Error + 'static>> {
 //!     let socket_addr = "127.0.0.1:80".parse()?;
-//!     let listener = TcpListener::bind(&socket_addr)?;
-//!     let mut incoming = listener.incoming();
+//!     let mut listener = TcpListener::bind(&socket_addr)?;
 //!
 //!     // accept connections and process them serially
-//!     while let Some(stream) = await!(incoming.next()) {
+//!     while let Some(stream) = await!(listener.next()) {
 //!         await!(say_hello(stream?));
 //!     }
 //!     Ok(())
@@ -43,5 +42,5 @@
 mod listener;
 mod stream;
 
-pub use self::listener::{Incoming, TcpListener};
+pub use self::listener::{TcpListener};
 pub use self::stream::{ConnectFuture, TcpStream};

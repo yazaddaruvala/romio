@@ -27,16 +27,16 @@ use std::pin::Pin;
 /// }
 ///
 /// async fn listen() -> Result<(), Box<dyn std::error::Error + 'static>> {
-///     let listener = UnixListener::bind("/tmp/sock")?;
-///     let mut incoming = listener.incoming();
+///     let mut listener = UnixListener::bind("/tmp/sock")?;
 ///
 ///     // accept connections and process them serially
-///     while let Some(stream) = await!(incoming.next()) {
+///     while let Some(stream) = await!(listener.next()) {
 ///         await!(say_hello(stream?));
 ///     }
 ///     Ok(())
 /// }
 /// ```
+#[must_use = "streams do nothing unless polled"]
 pub struct UnixListener {
     io: PollEvented<mio_uds::UnixListener>,
 }
@@ -95,39 +95,6 @@ impl UnixListener {
         self.io.get_ref().take_error()
     }
 
-    /// Consumes this listener, returning a stream of the sockets this listener
-    /// accepts.
-    ///
-    /// This method returns an implementation of the `Stream` trait which
-    /// resolves to the sockets the are accepted on this listener.
-    ///
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// #![feature(async_await, await_macro, futures_api)]
-    /// use romio::uds::UnixListener;
-    /// use futures::prelude::*;
-    ///
-    /// # async fn run () -> Result<(), Box<dyn std::error::Error + 'static>> {
-    /// let listener = UnixListener::bind("/tmp/sock")?;
-    /// let mut incoming = listener.incoming();
-    ///
-    /// // accept connections and process them serially
-    /// while let Some(stream) = await!(incoming.next()) {
-    ///     match stream {
-    ///         Ok(stream) => {
-    ///             println!("new client!");
-    ///         },
-    ///         Err(e) => { /* connection failed */ }
-    ///     }
-    /// }
-    /// # Ok(())}
-    /// ```
-    pub fn incoming(self) -> Incoming {
-        Incoming::new(self)
-    }
-
     fn poll_accept(&self, lw: &LocalWaker) -> Poll<io::Result<(UnixStream, SocketAddr)>> {
         let (io, addr) = ready!(self.poll_accept_std(lw)?);
 
@@ -165,23 +132,36 @@ impl AsRawFd for UnixListener {
     }
 }
 
-/// Stream of listeners
-#[derive(Debug)]
-pub struct Incoming {
-    inner: UnixListener,
-}
-
-impl Incoming {
-    pub(crate) fn new(listener: UnixListener) -> Incoming {
-        Incoming { inner: listener }
-    }
-}
-
-impl Stream for Incoming {
+/// An implementation of the `Stream` trait which
+/// resolves to the sockets the are accepted on this listener.
+///
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// #![feature(async_await, await_macro, futures_api)]
+/// use romio::uds::UnixListener;
+/// use futures::prelude::*;
+///
+/// # async fn run () -> Result<(), Box<dyn std::error::Error + 'static>> {
+/// let mut listener = UnixListener::bind("/tmp/sock")?;
+///
+/// // accept connections and process them serially
+/// while let Some(stream) = await!(listener.next()) {
+///     match stream {
+///         Ok(stream) => {
+///             println!("new client!");
+///         },
+///         Err(e) => { /* connection failed */ }
+///     }
+/// }
+/// # Ok(())}
+/// ```
+impl Stream for UnixListener {
     type Item = io::Result<UnixStream>;
 
     fn poll_next(self: Pin<&mut Self>, lw: &LocalWaker) -> Poll<Option<Self::Item>> {
-        let (socket, _) = ready!(self.inner.poll_accept(lw)?);
+        let (socket, _) = ready!(self.poll_accept(lw)?);
         Poll::Ready(Some(Ok(socket)))
     }
 }

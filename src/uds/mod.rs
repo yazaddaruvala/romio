@@ -12,11 +12,10 @@
 //! }
 //!
 //! async fn listen() -> Result<(), Box<dyn std::error::Error + 'static>> {
-//!     let listener = UnixListener::bind("/tmp/sock")?;
-//!     let mut incoming = listener.incoming();
+//!     let mut listener = UnixListener::bind("/tmp/sock")?;
 //!
 //!     // accept connections and process them serially
-//!     while let Some(stream) = await!(incoming.next()) {
+//!     while let Some(stream) = await!(listener.next()) {
 //!         await!(say_hello(stream?));
 //!     }
 //!     Ok(())
@@ -29,6 +28,6 @@ mod stream;
 mod ucred;
 
 pub use self::datagram::UnixDatagram;
-pub use self::listener::{Incoming, UnixListener};
+pub use self::listener::{UnixListener};
 pub use self::stream::{ConnectFuture, UnixStream};
 pub use self::ucred::UCred;

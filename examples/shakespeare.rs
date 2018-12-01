@@ -26,12 +26,11 @@ fn main() -> io::Result<()> {
     executor::block_on(async {
         let mut threadpool = ThreadPool::new()?;
 
-        let listener = TcpListener::bind(&"127.0.0.1:7878".parse().unwrap())?;
-        let mut incoming = listener.incoming();
+        let mut listener = TcpListener::bind(&"127.0.0.1:7878".parse().unwrap())?;
 
         println!("Listening on 127.0.0.1:7878");
 
-        while let Some(stream) = await!(incoming.next()) {
+        while let Some(stream) = await!(listener.next()) {
             let stream = stream?;
             let addr = stream.peer_addr()?;
 

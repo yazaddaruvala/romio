@@ -21,7 +21,7 @@ const THE_WINTERS_TALE: &[u8] = b"
 #[test]
 fn listener_reads() {
     drop(env_logger::try_init());
-    let server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+    let mut server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
     let addr = server.local_addr().unwrap();
 
     // client thread
@@ -32,8 +32,7 @@ fn listener_reads() {
 
     executor::block_on(async {
         let mut buf = vec![0; THE_WINTERS_TALE.len()];
-        let mut incoming = server.incoming();
-        let mut stream = await!(incoming.next()).unwrap().unwrap();
+        let mut stream = await!(server.next()).unwrap().unwrap();
         await!(stream.read_exact(&mut buf)).unwrap();
         assert_eq!(buf, THE_WINTERS_TALE);
     });
@@ -42,7 +41,7 @@ fn listener_reads() {
 #[test]
 fn listener_writes() {
     drop(env_logger::try_init());
-    let server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+    let mut server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
     let addr = server.local_addr().unwrap();
 
     // client thread
@@ -54,8 +53,7 @@ fn listener_writes() {
     });
 
     executor::block_on(async {
-        let mut incoming = server.incoming();
-        let mut stream = await!(incoming.next()).unwrap().unwrap();
+        let mut stream = await!(server.next()).unwrap().unwrap();
         await!(stream.write_all(THE_WINTERS_TALE)).unwrap();
     });
 }
@@ -63,7 +61,7 @@ fn listener_writes() {
 #[test]
 fn both_sides_async_using_threadpool() {
     drop(env_logger::try_init());
-    let server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+    let mut server = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
     let addr = server.local_addr().unwrap();
     
     let mut pool = executor::ThreadPool::new().unwrap();
@@ -75,8 +73,7 @@ fn both_sides_async_using_threadpool() {
 
     pool.run(FutureObj::from(Box::pinned(async {
         let mut buf = vec![0; THE_WINTERS_TALE.len()];
-        let mut incoming = server.incoming();
-        let mut stream = await!(incoming.next()).unwrap().unwrap();
+        let mut stream = await!(server.next()).unwrap().unwrap();
         await!(stream.read_exact(&mut buf)).unwrap();
         assert_eq!(buf, THE_WINTERS_TALE);
     })));
